@@ -70,6 +70,7 @@ class HyTE(Model):
 			if start.find('#') == -1 and len(start) == 4: year_list.append(int(start))
             # find: 있으면 0, 없으면 -1
             # start에 '#'이 없고 and start의 len이 4 (백단위 년도는 세지 않는다.)
+	    # 왜 안세냐고 대체
 			if end.find('#') == -1 and len(end) ==4: year_list.append(int(end))
 		
 		year_list.sort()
