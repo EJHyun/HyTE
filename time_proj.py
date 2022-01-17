@@ -172,55 +172,67 @@ class HyTE(Model):
 		triple_set = []
 		with open(self.p.triple2id,'r') as filein:
 			for line in filein:
+                # strip: white space 제거
 				tup = (int(line.split()[0].strip()) , int(line.split()[1].strip()), int(line.split()[2].strip()))
 				triple_set.append(tup)
 		triple_set=set(triple_set)
 
 		train_triples = []
+        # ddict란 deafualt dictionary이며, 그냥 dictionary인데 인자로 받은 datatype으로 초기화가 된다.
+        # ddict(dict)는 안에 value가 dictionary들이 들어간다는 뜻
 		self.start_time , self.end_time, self.num_class  = ddict(dict), ddict(dict), ddict(dict)
 		triple_time, entity_time = dict(), dict()
 		self.inp_idx, self.start_idx, self.end_idx ,self.labels = ddict(list), ddict(list), ddict(list), ddict(list)
 		max_ent, max_rel, count = 0, 0, 0
 
-		with open(self.p.dataset,'r') as filein:
+		with open(self.p.dataset,'r') as filein: # dataset은 train.txt를 말한다
 			for line in filein:
-				train_triples.append([int(x.strip()) for x in line.split()[0:3]])
-				triple_time[count] = [x.split('-')[0] for x in line.split()[3:5]]
+				train_triples.append([int(x.strip()) for x in line.split()[0:3]]) # 각 fact의 [s, r, o]가 append됨
+				triple_time[count] = [x.split('-')[0] for x in line.split()[3:5]] 
+                # 각 start, end의 숫자부분을 가지고 오려고 했던거 같은데..
+                # 이러면 -405는 뭐가됨? -> github에 report했음
 				count+=1
-
-
-		# self.start_time['triple'], self.end_time['triple'] = self.create_year2id(triple_time,'triple')
 
 		with open(self.p.entity2id,'r', encoding="utf-8") as filein2:
 			for line in filein2:
-				# entity_time[int(line.split('\t')[1])]=[x.split()[0] for x in line.split()[2:4]]
-				max_ent = max_ent+1
+				max_ent = max_ent+1 # entity 개수를 세는듯 하다.
+        print("max_ent_num: ", max_ent)
 
-		self.year2id = self.create_year2id(triple_time)
-		# self.start_time['entity'], self.end_time['entity'] = self.create_year2id(entity_time,'entiy')
-		# self.inp_idx['entity'],self.start_idx['entity'], self.end_idx['entity'] = self.create_id_labels(entity_time,'entity')
-		self.inp_idx['triple'], self.start_idx['triple'], self.end_idx['triple'] = self.create_id_labels(triple_time,'triple')
-		#pdb.set_trace()	
-		for i,ele in enumerate(self.inp_idx['entity']):
+		self.year2id = self.create_year2id(triple_time) # output: self.year_list, year2id
+		self.inp_idx['triple'], self.start_idx['triple'], self.end_idx['triple'] = self.create_id_labels(triple_time,'triple')	
+		# index, start가 어디 timestep에 속하는지, end가 어디 timestep에 속하는지
+
+        # 이 for문은 돌지 않는다.
+        # self.inp_idx['entity']는 선언된적이 없기 때문
+        # 중요한 코드는 아닌걸로 보이니 넘어가자
+        for i,ele in enumerate(self.inp_idx['entity']):
 			if self.start_idx['entity'][i] > self.end_idx['entity'][i]:
 				print(self.inp_idx['entity'][i],self.start_idx['entity'][i],self.end_idx['entity'][i])
 		self.num_class = len(self.year2id.keys())
+        # (prev, yr) pair의 갯수이다.
 		
-		# for dtype in ['entity','triple']:
-		# 	self.labels[dtype] = self.getOneHot(self.start_idx[dtype],self.end_idx[dtype], self.num_class)# Representing labels by one hot notation
-
 		keep_idx = set(self.inp_idx['triple'])
-		for i in range (len(train_triples)-1,-1,-1):
+        # 그냥 index이다. set([range(index num)])이랑 똑같음
+
+		for i in range (len(train_triples)-1,-1,-1): # range(start, stop, step)
 			if i not in keep_idx:
-				del train_triples[i]
+				del train_triples[i] 
+                # start / end time이 -405이런거나 100 이런경우 삭제해버린다.
+                # 왜 니 맘대로 삭제하는데?
 
 		with open(self.p.relation2id, 'r') as filein3:
 			for line in filein3:
 				max_rel = max_rel +1
+                # relation 개수를 세는듯 하다
+        print("Relation num: ", max_rel)
 		index = randint(1,len(train_triples))-1
+        # 범위내에서 랜덤하게 하나는 뽑아서 1을 뺀다
 		
 		posh, rela, post = zip(*train_triples)
 		head, rel, tail = zip(*train_triples)
+        # train triples를 s, r, o로 나눠줬다.
+        # pos는 positive가 아닐까 생각함
+        # rela의 a는 뭔지 모르겠음
 
 		posh = list(posh) 
 		post = list(post)
@@ -230,28 +242,33 @@ class HyTE(Model):
 		tail  =  list(tail)
 		rel   =  list(rel)
 
-		for i in range(len(posh)):
-			if self.start_idx['triple'][i] < self.end_idx['triple'][i]:
+		for i in range(len(posh)): # 말이 len(posh)이지, 그냥 train_triple 수만큼 반복
+			if self.start_idx['triple'][i] < self.end_idx['triple'][i]: # start랑 end랑 다른 year class에 속하는 경우
 				for j in range(self.start_idx['triple'][i] + 1,self.end_idx['triple'][i] + 1):
+                    #start yearclass +1 부터 end yearclass까지
 					head.append(posh[i])
 					rel.append(rela[i])
 					tail.append(post[i])
+                    # 멀쩡한 head, rel, tail에다가 속하는 yearclass 수만큼 append 해준다..?
 					self.start_idx['triple'].append(j)
+                    # 속하는 yearclass를 전부 다 넣어주는중
 
 		self.ph, self.pt, self.r,self.nh, self.nt , self.triple_time  = [], [], [], [], [], []
-		for triple in range(len(head)):
+		for triple in range(len(head)): # 기존 triple에다가 뒤에 yearclass만큼 반복시켜놓은놈들 추가
 			neg_set = set()
-			for k in range(self.p.M):
-				possible_head = randint(0,max_ent-1)
+			for k in range(self.p.M): # M은 neg_sample이다. default 5
+				possible_head = randint(0,max_ent-1) # head entity로 쓸 entity하나 뽑기
 				while (possible_head, rel[triple], tail[triple]) in triple_set or (possible_head, rel[triple],tail[triple]) in neg_set:
 					possible_head = randint(0,max_ent-1)
-				self.nh.append(possible_head)
-				self.nt.append(tail[triple])
-				self.r.append(rel[triple])
-				self.ph.append(head[triple])
-				self.pt.append(tail[triple])
-				self.triple_time.append(self.start_idx['triple'][triple])
-				neg_set.add((possible_head, rel[triple],tail[triple]))
+                    #unique한 negset을 만들고 싶음
+				self.nh.append(possible_head) # 틀린 머리 (negativ head)
+				self.nt.append(tail[triple])  # 정답 tail
+				self.r.append(rel[triple])    # 정답 relation
+				self.ph.append(head[triple])  # 정답 head
+				self.pt.append(tail[triple])  # 정답 tail # 그냥 가져다 써 왜 nt pt 나눠놓은거야 대체 왜
+				self.triple_time.append(self.start_idx['triple'][triple]) # 내가 속한 yearclass
+				neg_set.add((possible_head, rel[triple],tail[triple])) \
+                # negative triple (이 set은 그냥 negative triple이 unique한지를 검사하려고 만든거 같음)
 		
 		for triple in range(len(tail)):
 			neg_set = set()
@@ -266,14 +283,19 @@ class HyTE(Model):
 				self.pt.append(tail[triple])
 				self.triple_time.append(self.start_idx['triple'][triple])
 				neg_set.add((head[triple], rel[triple],possible_tail))
+        # tail도 같은 과정 거친다.
 
-		# self.triple_time = triple_time
-		# self.entity_time = entity_time
-		self.max_rel = max_rel
-		self.max_ent = max_ent
-		self.max_time = len(self.year2id.keys())
+		self.max_rel = max_rel # total relation수 (train + test + valid)
+		self.max_ent = max_ent # total entity 수 (train + test + valid)
+		self.max_time = len(self.year2id.keys()) # year class 수
 		self.data = list(zip(self.ph, self.pt, self.r , self.nh, self.nt, self.triple_time))
+        # pos head, pos tail, rel, neg head, neg tail인데
+        # neg head가 pos head랑 같으면 neg tail이 negative이고
+        # neg tail이 pos tail이랑 같으면 neg head가 negative임
 		self.data = self.data + self.data[0:self.p.batch_size]
+        # 그리고 마지막 의문의 복붙 0~ 50000까지를 복사해서 끝에다가 덧붙인다.
+        # batch size default = 50000
+
 
 	def calculated_score_for_positive_elements(self, t, epoch, f_valid, eval_mode='valid'):
 		loss =np.zeros(self.max_ent)
