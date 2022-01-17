@@ -11,10 +11,10 @@ from collections import defaultdict as ddict
 from sklearn.metrics import precision_recall_fscore_support
 
 
-YEARMIN = -50
+YEARMIN = -50 # YAGO의 최소 year는 -430인데?
 YEARMAX = 3000
 class HyTE(Model):
-	def read_valid(self,filename):
+	def read_valid(self,filename): # onlyTest가 parameter로 들어오면 valid.txt와 test.txt를 읽어서 (s, r, t, (start, end))의 쿼드러플로 만들어주는 함수
 		valid_triples = []
 		with open(filename,'r') as filein:
 			temp = []
@@ -44,67 +44,58 @@ class HyTE(Model):
 			yield data[start_idx : start_idx + self.p.batch_size]
 
 
-	def create_year2id(self,triple_time):
+	def create_year2id(self,triple_time): # load_data()에서만 쓰임
+        """
+        triple_time의 key는 train.txt에서의 index이고
+        value는 time_interval [start, end]이다.
+        이때 start와 end는 year part만 남아있다.
+        
+        input: triple_time = dict{index: [start, end], ...}
+        output: self.year_list, year2id
+        각각 self.year_list는 start와 end에 등장했던적이 있는 중복허용 year
+        year2id는 300개씩 끊어서 만든 year class의 id (time step)
+        """
 		year2id = dict()
 		freq = ddict(int)
 		count = 0
 		year_list = []
 
-		for k,v in triple_time.items():
+		for k,v in triple_time.items(): # items generate key, value pair tuple
 			try:
-				start = v[0].split('-')[0]
+				start = v[0].split('-')[0] # split을 사용할 필요가 없음
 				end = v[1].split('-')[0]
 			except:
-				pdb.set_trace()
+				pdb.set_trace() # debugger
 
 			if start.find('#') == -1 and len(start) == 4: year_list.append(int(start))
+            # find: 있으면 0, 없으면 -1
+            # start에 '#'이 없고 and start의 len이 4 (백단위 년도는 세지 않는다.)
 			if end.find('#') == -1 and len(end) ==4: year_list.append(int(end))
-
-		# for k,v in entity_time.items():
-		# 	start = v[0].split('-')[0]
-		# 	end = v[1].split('-')[0]
-			
-		# 	if start.find('#') == -1 and len(start) == 4: year_list.append(int(start))
-		# 	if end.find('#') == -1 and len(end) ==4: year_list.append(int(end))
-		# 	# if int(start) > int(end):
-		# 	# 	pdb.set_trace()
 		
 		year_list.sort()
+        # 지금까지 등장했던 fact들의 4자리 년도들의 집합 (start, end 상관없음)
 		for year in year_list:
 			freq[year] = freq[year] + 1
+        # 이 년도들의 개수를 세어준다.
 
 		year_class =[]
 		count = 0
-		for key in sorted(freq.keys()):
+		for key in sorted(freq.keys()): # freq의 key들은 이미 sorting이 되어있는데..
 			count += freq[key]
 			if count > 300:
-				year_class.append(key)
+				year_class.append(key) # 딱 넘기는 순간의 year가 append 된다.
 				count = 0
 		prev_year = 0
 		i=0
-		for i,yr in enumerate(year_class):
-			year2id[(prev_year,yr)] = i
+		for i,yr in enumerate(year_class): # index, 그리고 갈리는 기준점이 되는 year들
+			year2id[(prev_year,yr)] = i 
+            # key: 0~100, 101~200, 201~1400, ....
+            # val: 0    , 1,       2,       ....
 			prev_year = yr+1
-		year2id[(prev_year, max(year_list))] = i + 1
-		self.year_list =year_list
-
-		# for k,v in entity_time.items():
-		# 	if v[0] == '####-##-##' or v[1] == '####-##-##':
-		# 		continue
-		# 	if len(v[0].split('-')[0])!=4 or len(v[1].split('-')[0])!=4:
-		# 		continue
-		# 	start = v[0].split('-')[0]
-		# 	end = v[1].split('-')[0]
-		# for start in start_list:
-		# 	if start not in start_year2id:
-		# 		start_year2id[start] = count_start
-		# 		count_start+=1
-
-		# for end in end_list:
-		# 	if end not in end_year2id:
-		# 		end_year2id[end] = count_end
-		# 		count_end+=1
+		year2id[(prev_year, max(year_list))] = i + 1 
+        # 마지막 year_list는 count 300을 못넘겼을 수도 있어서 해주는걸로 보임
 		
+        self.year_list =year_list		
 		return year2id
 	def get_span_ids(self, start, end):
 		start =int(start)
@@ -128,46 +119,67 @@ class HyTE(Model):
 		return start_lbl, end_lbl
 
 	def create_id_labels(self,triple_time,dtype):
+        """
+        load data에서만 사용됨
+        triple_time = dict{index: [start, end], ...}
+        input: triple_time, dtype ('triple'이 들어왔음)
+        """
 		YEARMAX = 3000
 		YEARMIN =  -50
 		
 		inp_idx, start_idx, end_idx =[], [], []
 		
 		for k,v in triple_time.items():
-			start = v[0].split('-')[0]
+			start = v[0].split('-')[0] # 얘도 split 필요 없음
 			end = v[1].split('-')[0]
 			if start == '####':
 				start = YEARMIN
 			elif start.find('#') != -1 or len(start)!=4:
-				continue
+                # 그냥 == 0 할것이지
+                # start에 #이 있거나, start의 len이 4가 아니라면 continue
+                # ####이 아니면 #이 있는 경우가 없음
+                # 이건 triple_time만들때 parsing 잘못해서
+                # "" <- 이게 start로 들어오거나 100같이 세자리수 year가 들어오는 경우임
+                # 아니 도대체 세자리수는 왜 passing/filtering하는거임?
+				continue # 해당 iteration을 건너뜀
 
 			if end == '####':
 				end = YEARMAX
 			elif end.find('#')!= -1 or len(end)!=4:
-				continue
+				continue # end에 #이 있거나, len이 4가 아니라면 iteration 건너뜀
 			
-			start = int(start)
+			start = int(start) # '#'이  들어올 일은 없다.
 			end = int(end)
 			
-			if start > end:
+			if start > end: # 와 이런경우 진짜 있어 데이터에 Ex) (9738 9 9739 2013-##-##	2004-##-##)
 				end = YEARMAX
-			inp_idx.append(k)
-			if start == YEARMIN:
+			inp_idx.append(k) # 아니 하 진짜 왜 이딴곳에다가..
+            # continue로부터 살아남은 놈들의 index이다.
+
+			if start == YEARMIN: # only if start == "####" 근데 -405도 있는데 왜 -50이 mean이고 index 0이냐?
 				start_idx.append(0)
 			else:
-				for key,lbl in sorted(self.year2id.items(), key=lambda x:x[1]):
-					if start >= key[0] and start <= key[1]:
+				for key,lbl in sorted(self.year2id.items(), key=lambda x:x[1]): # ..sorting되어있는걸 또하고 또하고..
+					# year2id를 쭈욱 scan하면서 trainset으로 만든 triple_time의 순서에 맞는 id들을
+                    # start_idx에 넣고있다. 즉, train_set의 time interval들을 id화 하고있음
+                    if start >= key[0] and start <= key[1]:  # key = (prev, yr), prev < end < yr인 상황
 						start_idx.append(lbl)
+            """
+            start_idx는 continue에 걸리지 않는 이상 무조건 train set갯수만큼 생성됨
+            """
 			
-			if end == YEARMAX:
+			if end == YEARMAX: # 끝까지 ( end time이 ####인 경우이다.)
 				end_idx.append(len(self.year2id.keys())-1)
+                # end_idx가 처음 등장했다
+                # 전체 fact에 등장한 year들의 갯수 -1 개를 저장하는데 뭐하자는건진 모르겠음
 			else:
 				for key,lbl in sorted(self.year2id.items(), key=lambda x:x[1]):
-					if end >= key[0] and end <= key[1]:
+					if end >= key[0] and end <= key[1]: # key = (prev, yr), prev < end < yr인 상황
 						end_idx.append(lbl)
 
-		return inp_idx, start_idx, end_idx
-
+		return inp_idx, start_idx, end_idx 
+        # index, start가 어디 timestep에 속하는지, end가 어디 timestep에 속하는지
+	
 	def load_data(self):
 		triple_set = []
 		with open(self.p.triple2id,'r') as filein:
