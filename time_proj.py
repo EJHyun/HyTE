@@ -12,6 +12,11 @@ from sklearn.metrics import precision_recall_fscore_support
 
 
 YEARMIN = -50 # YAGO의 최소 year는 -431인데??
+"""
+보니까, test dataset에는 1000 이하의 year가 없음
+그래서 train에서 1000이하 year를 다 빼버린거같은데
+이거 cheating아니냐?
+"""
 YEARMAX = 3000
 class HyTE(Model):
 	def read_valid(self,filename): # onlyTest가 parameter로 들어오면 valid.txt와 test.txt를 읽어서 (s, r, t, (start, end))의 쿼드러플로 만들어주는 함수
