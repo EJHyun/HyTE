@@ -11,7 +11,7 @@ from collections import defaultdict as ddict
 from sklearn.metrics import precision_recall_fscore_support
 
 
-YEARMIN = -50 # YAGO의 최소 year는 -430인데?
+YEARMIN = -50 # YAGO의 최소 year는 -431인데??
 YEARMAX = 3000
 class HyTE(Model):
 	def read_valid(self,filename): # onlyTest가 parameter로 들어오면 valid.txt와 test.txt를 읽어서 (s, r, t, (start, end))의 쿼드러플로 만들어주는 함수
